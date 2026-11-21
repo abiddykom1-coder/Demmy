@@ -1,1 +1,394 @@
 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DEMMY Gaming</title>
+
+<style>
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #080817;
+  color: white;
+  font-family: Arial, sans-serif;
+  text-align: center;
+}
+
+header {
+  padding: 18px;
+  background: #15152e;
+  border-bottom: 2px solid #8b5cf6;
+}
+
+h1 {
+  color: #a78bfa;
+  margin: 5px;
+  letter-spacing: 3px;
+}
+
+header p {
+  color: #aaa;
+  margin-bottom: 5px;
+}
+
+.game {
+  max-width: 430px;
+  margin: 18px auto;
+  padding: 12px;
+}
+
+.scoreboard {
+  display: flex;
+  justify-content: space-around;
+  background: #191932;
+  padding: 14px;
+  border-radius: 12px;
+  margin-bottom: 12px;
+}
+
+canvas {
+  width: 100%;
+  height: 430px;
+  background: linear-gradient(#10102d, #211044);
+  border: 2px solid #8b5cf6;
+  border-radius: 12px;
+  display: block;
+  touch-action: none;
+}
+
+button {
+  background: #8b5cf6;
+  color: white;
+  border: none;
+  padding: 15px 22px;
+  border-radius: 10px;
+  font-size: 17px;
+  font-weight: bold;
+  margin: 8px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+button:active {
+  background: #6d28d9;
+}
+
+.controls {
+  display: flex;
+  justify-content: center;
+  gap: 35px;
+  margin-top: 12px;
+}
+
+.controls button {
+  width: 100px;
+  font-size: 25px;
+}
+
+#message {
+  color: #c4b5fd;
+  margin: 12px;
+  min-height: 24px;
+}
+
+footer {
+  color: #777;
+  padding: 20px;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+  <h1>DEMMY GAMING</h1>
+  <p>WELCOME TO NEON DASH</p>
+</header>
+
+<div class="game">
+
+  <div class="scoreboard">
+    <span>⭐ Score: <b id="score">0</b></span>
+    <span>🏆 Best: <b id="best">0</b></span>
+  </div>
+
+  <canvas id="gameCanvas"></canvas>
+
+  <p id="message">Collect stars and avoid obstacles!</p>
+
+  <button id="startBtn">START GAME</button>
+
+  <div class="controls">
+    <button id="left">⬅️</button>
+    <button id="right">➡️</button>
+  </div>
+
+</div>
+
+<footer>
+  © 2026 DEMMY GAMING
+</footer>
+
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
+const scoreText = document.getElementById("score");
+const bestText = document.getElementById("best");
+const message = document.getElementById("message");
+const startBtn = document.getElementById("startBtn");
+
+let W, H;
+let player;
+let obstacles = [];
+let stars = [];
+let score = 0;
+let best = 0;
+let running = false;
+let gameOver = false;
+let lastTime = 0;
+let spawnTimer = 0;
+let starTimer = 0;
+let leftPressed = false;
+let rightPressed = false;
+
+function resize() {
+  const rect = canvas.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+
+  W = rect.width;
+  H = rect.height;
+
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  if (!running) draw();
+}
+
+window.addEventListener("resize", resize);
+
+function resetGame() {
+  score = 0;
+  obstacles = [];
+  stars = [];
+
+  player = {
+    x: W / 2 - 16,
+    y: H - 65,
+    width: 32,
+    height: 32,
+    speed: 260
+  };
+
+  spawnTimer = 0;
+  starTimer = 0;
+  gameOver = false;
+  scoreText.textContent = score;
+  message.textContent = "Collect stars and survive!";
+}
+
+function drawPlayer() {
+  ctx.fillStyle = "#a78bfa";
+  ctx.shadowColor = "#a78bfa";
+  ctx.shadowBlur = 18;
+
+  ctx.fillRect(
+    player.x,
+    player.y,
+    player.width,
+    player.height
+  );
+
+  ctx.shadowBlur = 0;
+}
+
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+
+  // Background stars
+  ctx.fillStyle = "#ffffff";
+
+  for (let i = 0; i < 30; i++) {
+    const x = (i * 73) % W;
+    const y = (i * 97) % H;
+    ctx.fillRect(x, y, 2, 2);
+  }
+
+  if (player) drawPlayer();
+
+  // Obstacles
+  ctx.fillStyle = "#fb7185";
+
+  obstacles.forEach(o => {
+    ctx.fillRect(o.x, o.y, o.size, o.size);
+  });
+
+  // Collectible stars
+  ctx.font = "24px Arial";
+
+  stars.forEach(s => {
+    ctx.fillText("⭐", s.x, s.y);
+  });
+}
+
+function hit(a, b) {
+  return (
+    a.x < b.x + b.width &&
+    a.x + a.width > b.x &&
+    a.y < b.y + b.height &&
+    a.y + a.height > b.y
+  );
+}
+
+function endGame() {
+  running = false;
+  gameOver = true;
+
+  if (score > best) {
+    best = score;
+    localStorage.setItem("demmyBest", best);
+  }
+
+  bestText.textContent = best;
+  message.textContent = "GAME OVER! Your score: " + score;
+  startBtn.textContent = "PLAY AGAIN";
+
+  draw();
+}
+
+function update(dt) {
+  if (leftPressed) player.x -= player.speed * dt;
+  if (rightPressed) player.x += player.speed * dt;
+
+  player.x = Math.max(
+    0,
+    Math.min(W - player.width, player.x)
+  );
+
+  spawnTimer += dt;
+  starTimer += dt;
+
+  if (spawnTimer > 0.85) {
+    obstacles.push({
+      x: Math.random() * (W - 28),
+      y: -30,
+      size: 25 + Math.random() * 10,
+      speed: 160 + Math.random() * 100
+    });
+
+    spawnTimer = 0;
+  }
+
+  if (starTimer > 1.5) {
+    stars.push({
+      x: 15 + Math.random() * (W - 35),
+      y: -20,
+      size: 20,
+      speed: 150
+    });
+
+    starTimer = 0;
+  }
+
+  obstacles.forEach(o => {
+    o.y += o.speed * dt;
+
+    if (hit(player, {
+      x: o.x,
+      y: o.y,
+      width: o.size,
+      height: o.size
+    })) {
+      endGame();
+    }
+  });
+
+  stars.forEach(s => {
+    s.y += s.speed * dt;
+
+    if (hit(player, {
+      x: s.x,
+      y: s.y - 20,
+      width: 24,
+      height: 24
+    })) {
+      s.collected = true;
+      score += 10;
+      scoreText.textContent = score;
+    }
+  });
+
+  obstacles = obstacles.filter(o => o.y < H + 40);
+  stars = stars.filter(s => s.y < H + 30 && !s.collected);
+}
+
+function loop(time) {
+  if (!running) return;
+
+  const dt = Math.min((time - lastTime) / 1000, 0.04);
+  lastTime = time;
+
+  update(dt);
+  draw();
+
+  if (running) {
+    requestAnimationFrame(loop);
+  }
+}
+
+function startGame() {
+  if (running) return;
+
+  resetGame();
+  running = true;
+  startBtn.textContent = "GAME RUNNING";
+  message.textContent = "Good luck! Collect those stars!";
+  lastTime = performance.now();
+
+  requestAnimationFrame(loop);
+}
+
+function control(id, direction) {
+  const btn = document.getElementById(id);
+
+  btn.addEventListener("pointerdown", e => {
+    e.preventDefault();
+
+    if (direction === "left") leftPressed = true;
+    if (direction === "right") rightPressed = true;
+  });
+
+  function release() {
+    if (direction === "left") leftPressed = false;
+    if (direction === "right") rightPressed = false;
+  }
+
+  btn.addEventListener("pointerup", release);
+  btn.addEventListener("pointercancel", release);
+  btn.addEventListener("lostpointercapture", release);
+  btn.addEventListener("pointerleave", release);
+}
+
+control("left", "left");
+control("right", "right");
+
+startBtn.addEventListener("click", startGame);
+
+best = Number(localStorage.getItem("demmyBest")) || 0;
+bestText.textContent = best;
+
+resize();
+resetGame();
+draw();
+</script>
+
+</body>
+  </html>
+  
